@@ -180,9 +180,13 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
     setBandWeights(s.bandWeights)
     settingsLoaded.current = true
 
-    const id = genId()
-    setPlaylist([{ id, name: "welcome.mp4", url: "/videos/welcome.mp4" }])
-    setCurrentId(id)
+    const id1 = genId()
+    const id2 = genId()
+    setPlaylist([
+      { id: id1, name: "welcome.mp4", url: "/videos/welcome.mp4" },
+      { id: id2, name: "eagle.mp4", url: "/videos/eagle.mp4" },
+    ])
+    setCurrentId(id1)
   }, [])
 
   // ── Persist to cookie ──

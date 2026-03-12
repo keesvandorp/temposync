@@ -152,7 +152,7 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser. A default welcome video is loaded automatically — drop your own videos to replace it.
+Open [http://localhost:3000](http://localhost:3000) in your browser. Two default videos are loaded automatically — drop your own videos to replace them.
 
 ## Usage
 
