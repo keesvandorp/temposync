@@ -1,9 +1,11 @@
 {
   "name": "temposync",
   "version": "0.1.0",
+  "author": {"name": "Kees van Dorp", "email": "keesvandorp@gmail.com"},
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:secure": "next dev --experimental-https",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

@@ -304,22 +304,33 @@ export function VideoPlayer() {
   }, [currentVideo])
 
   // ── Fullscreen ──
+  const supportsNativeFs = typeof document !== "undefined" &&
+    (typeof document.documentElement.requestFullscreen === "function" ||
+     typeof (document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen === "function")
+
   const toggleFullscreen = useCallback(() => {
     const container = videoContainerRef.current
     if (!container) return
     const doc = document as Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void }
     const el = container as HTMLElement & { webkitRequestFullscreen?: () => void }
 
-    if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+    const isNativeFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement)
+
+    if (isNativeFs) {
       if (doc.exitFullscreen) doc.exitFullscreen()
       else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen()
+    } else if (el.requestFullscreen) {
+      el.requestFullscreen()
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen()
     } else {
-      if (el.requestFullscreen) el.requestFullscreen()
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen()
+      // CSS fallback for iPhone
+      setIsFullscreen((prev) => !prev)
     }
   }, [])
 
   useEffect(() => {
+    if (!supportsNativeFs) return
     const doc = document as Document & { webkitFullscreenElement?: Element }
     const handleFsChange = () => setIsFullscreen(!!(doc.fullscreenElement || doc.webkitFullscreenElement))
     document.addEventListener("fullscreenchange", handleFsChange)
@@ -328,7 +339,20 @@ export function VideoPlayer() {
       document.removeEventListener("fullscreenchange", handleFsChange)
       document.removeEventListener("webkitfullscreenchange", handleFsChange)
     }
-  }, [])
+  }, [supportsNativeFs])
+
+  // Force canvas resize on orientation change (CSS fullscreen on iPhone)
+  const [, setViewportKey] = useState(0)
+  useEffect(() => {
+    if (supportsNativeFs || !isFullscreen) return
+    const onResize = () => setViewportKey((k) => k + 1)
+    window.addEventListener("resize", onResize)
+    screen.orientation?.addEventListener("change", onResize)
+    return () => {
+      window.removeEventListener("resize", onResize)
+      screen.orientation?.removeEventListener("change", onResize)
+    }
+  }, [supportsNativeFs, isFullscreen])
 
   // ── Drag & drop (empty state) ──
   const handleDrop = useCallback(
@@ -353,7 +377,7 @@ export function VideoPlayer() {
         {currentVideo ? (
           <div
             ref={videoContainerRef}
-            className="relative bg-black overflow-hidden"
+            className={`relative bg-black overflow-hidden ${isFullscreen && !supportsNativeFs ? "fixed inset-0 z-50" : ""}`}
             tabIndex={0}
           >
             <video
@@ -386,7 +410,7 @@ export function VideoPlayer() {
             />
             <canvas
               ref={canvasRef}
-              className={`w-full bg-black ${isFullscreen ? "h-screen" : "aspect-video"}`}
+              className={`w-full bg-black ${isFullscreen ? "h-dvh" : "aspect-video"}`}
             />
             {!isFullscreen && (
               <>

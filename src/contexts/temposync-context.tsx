@@ -324,6 +324,10 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
       setIsListening(false)
     } else {
       try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          alert("Microphone access requires HTTPS. Please use a secure connection.")
+          return
+        }
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: false,
