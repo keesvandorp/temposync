@@ -307,18 +307,27 @@ export function VideoPlayer() {
   const toggleFullscreen = useCallback(() => {
     const container = videoContainerRef.current
     if (!container) return
-    if (document.fullscreenElement) {
-      document.exitFullscreen()
+    const doc = document as Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void }
+    const el = container as HTMLElement & { webkitRequestFullscreen?: () => void }
+
+    if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+      if (doc.exitFullscreen) doc.exitFullscreen()
+      else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen()
     } else {
-      container.requestFullscreen()
+      if (el.requestFullscreen) el.requestFullscreen()
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen()
     }
   }, [])
 
   useEffect(() => {
-    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    const doc = document as Document & { webkitFullscreenElement?: Element }
+    const handleFsChange = () => setIsFullscreen(!!(doc.fullscreenElement || doc.webkitFullscreenElement))
     document.addEventListener("fullscreenchange", handleFsChange)
-    return () =>
+    document.addEventListener("webkitfullscreenchange", handleFsChange)
+    return () => {
       document.removeEventListener("fullscreenchange", handleFsChange)
+      document.removeEventListener("webkitfullscreenchange", handleFsChange)
+    }
   }, [])
 
   // ── Drag & drop (empty state) ──
