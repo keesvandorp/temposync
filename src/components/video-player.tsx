@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { useTempoSync } from "@/contexts/temposync-context"
+import { useTempoSync, applyEasing } from "@/contexts/temposync-context"
 
 const CROSSFADE_SEC = 1
 const GRAPH_LEN = 1800
@@ -25,6 +25,7 @@ export function VideoPlayer() {
     maxSpeed,
     speedGraphRef,
     smoothingRef,
+    easingModeRef,
     minSpeedRef,
     maxSpeedRef,
     energyRef,
@@ -68,17 +69,21 @@ export function VideoPlayer() {
       const dt = Math.min((now - lastTime) / 1000, 0.1)
       lastTime = now
 
-      const midSpeed = (minSpeedRef.current + maxSpeedRef.current) / 2
       let targetSpeed: number
       if (isActiveRef.current) {
+        const eased = applyEasing(energyRef.current, easingModeRef.current)
         targetSpeed =
           minSpeedRef.current +
-          energyRef.current * (maxSpeedRef.current - minSpeedRef.current)
+          eased * (maxSpeedRef.current - minSpeedRef.current)
       } else {
         targetSpeed = 1.0
       }
 
-      const alpha = smoothingRef.current
+      // Time-constant based smoothing: slider 0 = instant, 1 = very slow
+      // Maps smoothing (0–1) to a time constant τ (0.01s – 5s)
+      const tau = 0.01 + smoothingRef.current * smoothingRef.current * 5
+      const alpha = Math.exp(-dt / tau)
+      const midSpeed = (minSpeedRef.current + maxSpeedRef.current) / 2
       const decayed = midSpeed + (smoothedSpeedRef.current - midSpeed) * alpha
       smoothedSpeedRef.current = decayed + (targetSpeed - decayed) * (1 - alpha)
 

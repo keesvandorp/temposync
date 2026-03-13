@@ -1,36 +1,38 @@
-# TempoSync
+<p align="center">
+  <img src="src/app/apple-icon.png" alt="TempoSync" width="80" height="80" />
+</p>
 
-**Sync looping video playback speed to live music energy in real time.**
+<h1 align="center">TempoSync</h1>
 
-TempoSync is designed for live performance environments — think a pianist performing at a venue where projected visuals should breathe with the music. When the music swells, the video speeds up; when it fades to silence, the video slows down. The result is a seamless, organic coupling between audio energy and visual tempo.
+<p align="center">
+  TempoSync lets looping visuals move with the music. Built for live performance, it listens to real-time audio energy and transforms it into playback speed, creating visuals that swell, drift, and breathe alongside the sound.
+</p>
 
 ## How it works
 
-TempoSync captures microphone audio via the Web Audio API, computes a real-time energy value from the frequency spectrum, and maps that energy directly to the playback speed of a looping video.
+TempoSync captures microphone audio via the Web Audio API, computes a real-time energy value from the frequency spectrum, and maps that energy to the playback speed of a looping video.
 
 ### 1. Audio analysis — spectral energy with perceptual weighting
 
-The microphone signal is routed through a `GainNode` (for mic volume control) into an `AnalyserNode` (FFT size 4096, smoothing 0.3). Each animation frame, the frequency spectrum is read via `getByteFrequencyData()`.
+The microphone signal is routed through a `GainNode` (mic volume control) into an `AnalyserNode` (FFT size 4096, smoothing 0.3). Each animation frame, the frequency spectrum is read via `getByteFrequencyData()`.
 
-The spectrum is split into **six perceptual frequency bands**, each with a configurable weight reflecting its contribution to perceived musical energy:
+The spectrum is split into **six perceptual frequency bands**, each with a configurable weight:
 
-| Band       | Range         | Default weight |
-|------------|---------------|----------------|
-| Sub-bass   | 0 – 60 Hz     | 1.0            |
-| Bass       | 60 – 250 Hz   | 0.9            |
-| Low-mid    | 250 – 500 Hz  | 0.7            |
-| Mid        | 500 – 2000 Hz | 0.5            |
-| High-mid   | 2000 – 6000 Hz| 0.3            |
-| High / air | 6000 Hz +     | 0.15           |
+| Band       | Range          | Default weight |
+|------------|----------------|----------------|
+| Sub-bass   | 0 – 60 Hz      | 1.0            |
+| Bass       | 60 – 250 Hz    | 0.9            |
+| Low-mid    | 250 – 500 Hz   | 0.7            |
+| Mid        | 500 – 2000 Hz  | 0.5            |
+| High-mid   | 2000 – 6000 Hz | 0.3            |
+| High / air | 6000 Hz +      | 0.15           |
 
-Lower frequencies are weighted more heavily because they carry most of the perceived energy in piano and ensemble music. All band weights are adjustable via the EQ sliders in the settings panel.
+Lower frequencies are weighted more heavily because they carry most of the perceived energy in piano and ensemble music. All band weights are adjustable via the EQ sliders in the settings panel. Live per-band energy meters show the isolated contribution of each band.
 
-Two metrics are computed per frame:
+Two metrics are combined per frame:
 
-- **Weighted level** — the average bin amplitude across all bands (sustained energy)
-- **Spectral flux** — the sum of *positive* bin-to-bin differences from the previous frame (onset/transient detection)
-
-These are combined into a single energy value:
+- **Weighted level** — average bin amplitude across all bands (sustained energy)
+- **Spectral flux** — sum of positive bin-to-bin differences from the previous frame (onset/transient detection)
 
 ```
 combined = weightedLevel × 0.65 + spectralFlux × 15.0 × 0.35
@@ -38,45 +40,60 @@ combined = weightedLevel × 0.65 + spectralFlux × 15.0 × 0.35
 
 ### 2. Adaptive noise floor
 
-To ensure silence maps to zero energy (not mic hiss or room tone), an adaptive noise floor tracks the ambient level:
+An adaptive noise floor ensures silence maps to zero energy (not mic hiss or room tone):
 
 ```
 baselineAlpha = energy > baseline ? 0.0005 : 0.02
-baseline = baseline + (energy - baseline) × baselineAlpha
+baseline      = baseline + (energy - baseline) × baselineAlpha
 ```
 
-The floor rises **very slowly** (α = 0.0005) so music isn't mistaken for noise, but drops **moderately fast** (α = 0.02) so silence is quickly recognized. The final energy is the signal above this floor:
+The floor rises **very slowly** (α = 0.0005) so music isn't mistaken for noise, but drops **moderately fast** (α = 0.02) so silence is quickly recognized.
 
 ```
 energy = clamp(0, 1, (combined - baseline) × sensitivity)
 ```
 
-### 3. Energy → speed mapping
+### 3. Easing curves
 
-The processed energy (0–1) maps linearly to the configured speed range:
+Before mapping energy to speed, an **easing function** reshapes the energy curve. This controls how the system *feels* — whether it responds more to quiet passages, loud peaks, or treats all levels proportionally.
+
+14 easing modes are available:
+
+| Mode         | Character                                      |
+|--------------|------------------------------------------------|
+| `linear`     | Proportional — energy maps directly to speed   |
+| `smoothstep` | Gentle S-curve, slightly softer on extremes    |
+| `inQuad`     | Slow start — only reacts to louder energy      |
+| `outQuad`    | Fast start — responsive to soft sounds         |
+| `inOutQuad`  | Slow at extremes, faster in the middle         |
+| `inCubic`    | Steeper slow start — ignores quiet, amplifies loud |
+| `outCubic`   | Very responsive to soft sounds (default)       |
+| `inOutCubic` | Strong S-curve                                 |
+| `inSine`     | Gentle slow start                              |
+| `outSine`    | Gentle fast start                              |
+| `inOutSine`  | Smooth sine-based S-curve                      |
+| `inExpo`     | Exponential — nearly silent until loud peaks   |
+| `outExpo`    | Exponential — huge response to quiet sounds    |
+| `inOutExpo`  | Extreme S-curve — quiet or loud, little middle |
+
+The eased energy is then mapped to the speed range:
 
 ```
-targetSpeed = minSpeed + energy × (maxSpeed - minSpeed)
+easedEnergy = applyEasing(energy, easingMode)
+targetSpeed = minSpeed + easedEnergy × (maxSpeed - minSpeed)
 ```
 
-For example, with a range of 0.5× – 3.0×:
-- Energy 0 (silence) → 0.5× playback
-- Energy 0.5 (moderate) → 1.75× playback
-- Energy 1 (loud/intense) → 3.0× playback
+### 4. Time-constant smoothing
 
-### 4. Midpoint-decay smoothing
-
-Raw energy is noisy, so a smoothing filter prevents jerky speed changes. Unlike a standard exponential moving average (which holds its last value), TempoSync's smoother **decays toward the midpoint** of the speed range during quiet moments:
+Raw energy is noisy, so a smoothing filter prevents jerky speed changes. The smoother uses a **time-constant** approach (τ) rather than a raw alpha value, giving consistent behavior regardless of frame rate:
 
 ```
-midSpeed = (minSpeed + maxSpeed) / 2
-decayed  = midSpeed + (smoothed - midSpeed) × α
-smoothed = decayed + (targetSpeed - decayed) × (1 - α)
+τ     = 0.01 + slider² × 5      // maps 0–1 slider to 10ms – 5s
+alpha = exp(-dt / τ)             // per-frame smoothing factor
+smoothed = smoothed × alpha + target × (1 - alpha)
 ```
 
-Where `α` is the smoothing factor (0 = instant, 0.995 = very slow). This means:
-- **With energy**: the smoothed speed follows the target
-- **Without energy**: the smoothed speed drifts back toward the center of the range, not toward the minimum or wherever it happened to be
+The quadratic slider mapping puts most of the useful range (fast response) in the first half of the slider, with the second half reserved for very slow, cinematic smoothing. The UI shows the actual response time in ms or seconds.
 
 ### 5. Playback rate application
 
@@ -84,33 +101,35 @@ The smoothed speed is applied to the HTML5 `<video>` element's `playbackRate` pr
 
 ## Features
 
-- **Energy-based speed control** — Live microphone audio drives video playback rate with configurable sensitivity and smoothing
-- **Multi-video playlist** — Drop multiple video files; reorder via drag-and-drop, remove individual items, or add more
-- **Playback progress** — Active playlist item shows elapsed / total time and a progress bar
-- **Arrow key navigation** — Switch videos with ← → keys, including in fullscreen
-- **Auto-advance with countdown** — Cycle to the next video after a configurable interval, with a live countdown timer shown on the active item
-- **Crossfade transitions** — Smooth opacity crossfade between videos (1 second)
-- **Fullscreen mode** — Clean, overlay-free view for live projection
-- **Live waveform visualiser** — Real-time audio waveform display
-- **Speed graph** — Scrolling 30-second graph showing raw (gray) and smoothed (green) speed, with min/max/1× reference lines
-- **EQ band weighting** — Per-band gain sliders to tune which frequencies drive the energy response
-- **Mic gain control** — Boost or reduce microphone input to suit your environment
-- **Dark / light theme** — Toggle with a button; persisted via cookies
-- **Settings persistence** — All settings saved to cookies and restored on reload
+- **Energy-based speed control** — microphone audio drives video playback rate with configurable sensitivity, easing, and smoothing
+- **14 easing curves** — reshape the energy-to-speed response via a searchable command palette
+- **Multi-video playlist** — drop multiple video files; reorder via drag-and-drop, remove individual items, or add more
+- **Playback progress** — active playlist item shows elapsed / total time and a progress bar
+- **Arrow key navigation** — switch videos with ← → keys, including in fullscreen
+- **Auto-advance with countdown** — cycle to the next video after a configurable interval with a live countdown
+- **Crossfade transitions** — smooth opacity crossfade between videos (1 second)
+- **Fullscreen mode** — clean, overlay-free view for live projection (CSS-based fallback on iPhone Safari)
+- **Live waveform visualiser** — real-time audio waveform display
+- **Speed graph** — scrolling 30-second graph with raw and smoothed speed
+- **EQ band weighting** — per-band gain sliders with live energy meters
+- **Mic gain control** — boost or reduce microphone input to suit your environment
+- **Dark / light theme** — toggle with a button; persisted via cookies
+- **Settings persistence** — all settings saved to cookies and restored on reload
 
 ## Settings
 
-| Setting            | Range        | Default | Description                                              |
-|--------------------|--------------|---------|----------------------------------------------------------|
-| Smoothing          | 0 – 99.5%   | 85%     | How much the speed is eased. 0% = instant, 99% = very slow |
-| Speed Range        | 0.1× – 8×   | 0.5 – 4× | Min and max playback speed (dual-thumb slider)          |
-| Energy Sensitivity | 0.5× – 10×  | 3.0×    | Multiplier on the energy signal after noise floor        |
-| Mic Volume         | 0.1× – 5×   | 1.0×    | Input gain applied before analysis                       |
-| EQ Band Weights    | 0 – 1 each  | See table above | Per-band gain to shape which frequencies contribute |
+| Setting            | Range         | Default    | Description                                                         |
+|--------------------|---------------|------------|---------------------------------------------------------------------|
+| Smoothing          | 10 ms – 5 s  | ~850 ms    | Time-constant for speed changes. Left = instant, right = slow/smooth |
+| Easing Curve       | 14 modes      | `outCubic` | How energy maps to speed — see table above                          |
+| Speed Range        | 0.1× – 8×    | 0.5 – 4×   | Min and max playback speed (dual-thumb slider)                      |
+| Energy Sensitivity | 0.5× – 10×   | 3.0×       | Multiplier on the energy signal after noise floor                   |
+| Mic Volume         | 0.1× – 5×    | 1.0×       | Input gain applied before analysis                                  |
+| EQ Band Weights    | 0 – 1 each   | See table  | Per-band gain to shape which frequencies contribute                 |
 
 ## Architecture
 
-The app follows a **context/provider pattern** with a single `TempoSyncProvider` holding all shared state (playlist, settings, audio, video progress). Components consume state via the `useTempoSync()` hook, avoiding prop drilling.
+The app follows a **context/provider pattern** with a single `TempoSyncProvider` holding all shared state (playlist, settings, audio, video progress). Components consume state via the `useTempoSync()` hook.
 
 ```
 src/
@@ -135,12 +154,12 @@ src/
 
 ## Tech stack
 
-- [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
+- [Next.js 16](https://nextjs.org/) — App Router, Turbopack
 - [React 19](https://react.dev/)
 - [Tailwind CSS v4](https://tailwindcss.com/)
-- [shadcn/ui](https://ui.shadcn.com/) (Button, Card, Slider, Badge, Switch, Input, InputGroup, Label)
-- [dnd-kit](https://dndkit.com/) (drag-and-drop playlist reordering)
-- [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) (AudioContext → GainNode → AnalyserNode)
+- [shadcn/ui](https://ui.shadcn.com/) — Button, Card, Slider, Badge, Switch, Input, InputGroup, Label, Command, Select
+- [@dnd-kit](https://dndkit.com/) — drag-and-drop playlist reordering
+- [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) — AudioContext → GainNode → AnalyserNode
 
 ## Getting started
 
@@ -148,29 +167,36 @@ src/
 # Install dependencies
 pnpm install
 
-# Start the development server
+# Development server
 pnpm dev
+
+# Development server with HTTPS (required for microphone on some devices)
+pnpm dev:secure
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser. Two default videos are loaded automatically — drop your own videos to replace them.
+Open [http://localhost:3000](http://localhost:3000). Two default videos are loaded automatically — drop your own to replace them.
 
 ## Usage
 
-1. **Add videos** — Drag and drop video files onto the drop zone, or click to browse
-2. **Reorder** — Drag the grip handle on any playlist item to reorder
-3. **Start listening** — Click "Start Listening" to grant microphone access
-4. **Play music** — The video playback speed now follows the energy of whatever the mic picks up
-5. **Tune** — Adjust *Energy Sensitivity*, *Smoothing*, and *EQ Band Weights* to taste
-6. **Auto-advance** — Enable auto-advance and set an interval; a countdown shows when the next switch will happen
-7. **Live setup** — Use fullscreen mode on a projector, place the mic near the piano, and adjust gain/sensitivity to match the room acoustics
+1. **Add videos** — drag and drop video files onto the drop zone, or click to browse
+2. **Reorder** — drag the grip handle on any playlist item
+3. **Start listening** — click "Start Listening" to grant microphone access
+4. **Play music** — the video playback speed follows the energy of whatever the mic picks up
+5. **Tune** — adjust *Smoothing*, *Easing Curve*, *Energy Sensitivity*, and *EQ Band Weights* to taste
+6. **Auto-advance** — enable auto-advance and set an interval; a countdown shows when the next switch will happen
+7. **Live setup** — use fullscreen mode on a projector, place the mic near the instrument, and adjust gain/sensitivity to match the room
 
-## Build
+## Production build
 
 ```bash
 pnpm build
 pnpm start
 ```
 
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
 ## License
 
-MIT
+[MIT](LICENSE) © [Kees van Dorp](https://github.com/keesvandorp)

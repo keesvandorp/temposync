@@ -3,18 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
 interface EnergyDetectionOptions {
-  minSpeed: number
-  maxSpeed: number
-  smoothing: number
   energySensitivity: number
   micGain: number
   bandWeights: number[]
 }
 
 interface EnergyDetectionResult {
-  playbackRate: number
   isActive: boolean
   energy: number
+  bandEnergiesRef: React.RefObject<number[]>
   attachStream: (stream: MediaStream) => void
   detach: () => void
 }
@@ -23,15 +20,11 @@ export function useEnergyDetection(
   options: Partial<EnergyDetectionOptions> = {}
 ): EnergyDetectionResult {
   const {
-    minSpeed = 0.25,
-    maxSpeed = 4.0,
-    smoothing = 0.85,
     energySensitivity = 3.0,
     micGain = 1.0,
     bandWeights = [1.0, 0.9, 0.7, 0.5, 0.3, 0.15],
   } = options
 
-  const [playbackRate, setPlaybackRate] = useState(1)
   const [isActive, setIsActive] = useState(false)
   const [energy, setEnergy] = useState(0)
 
@@ -39,16 +32,16 @@ export function useEnergyDetection(
   const analyserRef = useRef<AnalyserNode | null>(null)
   const gainNodeRef = useRef<GainNode | null>(null)
   const animFrameRef = useRef<number>(0)
-  const smoothedRateRef = useRef<number>(1)
   const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
 
   // Store options in refs so detect() never needs to be recreated
-  const optionsRef = useRef({ minSpeed, maxSpeed, smoothing, energySensitivity, bandWeights })
-  optionsRef.current = { minSpeed, maxSpeed, smoothing, energySensitivity, bandWeights }
+  const optionsRef = useRef({ energySensitivity, bandWeights })
+  optionsRef.current = { energySensitivity, bandWeights }
 
   // Track a running baseline (noise floor) that adapts slowly
   const baselineRef = useRef<number>(0)
   const prevSpectrumRef = useRef<Float32Array<ArrayBuffer> | null>(null)
+  const bandEnergiesRef = useRef<number[]>([0, 0, 0, 0, 0, 0])
 
   const detect = useCallback(() => {
     const analyser = analyserRef.current
@@ -91,6 +84,8 @@ export function useEnergyDetection(
     let weightedLevel = 0
     let totalWeight = 0
     let bandIdx = 0
+    const bandSums = [0, 0, 0, 0, 0, 0]
+    const bandCounts = [0, 0, 0, 0, 0, 0]
 
     for (let i = 0; i < bufferLength; i++) {
       const hz = i * binHz
@@ -113,8 +108,17 @@ export function useEnergyDetection(
       weightedLevel += current * w
       totalWeight += w
 
+      // Per-band level (unweighted, raw volume)
+      bandSums[bandIdx] += current
+      bandCounts[bandIdx]++
+
       // Store for next frame
       prevSpectrum[i] = current
+    }
+
+    // Update per-band energies
+    for (let b = 0; b < 6; b++) {
+      bandEnergiesRef.current[b] = bandCounts[b] > 0 ? bandSums[b] / bandCounts[b] : 0
     }
 
     // Normalize
@@ -126,7 +130,7 @@ export function useEnergyDetection(
     const combined = avgLevel * 0.65 + avgFlux * 15.0 * 0.35
     const fullEnergy = Math.min(1, Math.max(0, combined))
 
-    const { minSpeed: min, maxSpeed: max, smoothing: sm, energySensitivity: es } = optionsRef.current
+    const { energySensitivity: es } = optionsRef.current
 
     // Adaptive noise floor — tracks only ambient silence (mic hiss, room tone)
     // Rises very slowly so music isn't treated as noise
@@ -141,22 +145,8 @@ export function useEnergyDetection(
     // This preserves the full dynamic range of the music
     const clamped = Math.min(1, above * Math.max(0.1, es))
 
-    // Export the processed energy (noise-floor subtracted, sensitivity scaled)
+    // Export raw processed energy — easing and smoothing are handled by the render loop
     setEnergy(clamped)
-
-    // Ease-in-out (smoothstep) for natural acceleration/deceleration
-    const eased = clamped * clamped * (3 - 2 * clamped)
-
-    const targetRate = min + eased * (max - min)
-    const clampedTarget = Math.max(min, Math.min(max, targetRate))
-
-    const prev = smoothedRateRef.current
-    // Asymmetric smoothing: fast fall-off when energy drops, smooth rise when increasing
-    const effectiveSmoothing = clampedTarget < prev ? sm * 0.3 : sm
-    const smoothed = prev * effectiveSmoothing + clampedTarget * (1 - effectiveSmoothing)
-    smoothedRateRef.current = smoothed
-
-    setPlaybackRate(smoothed)
 
     animFrameRef.current = requestAnimationFrame(detect)
   }, []) // stable — reads options from ref
@@ -182,7 +172,6 @@ export function useEnergyDetection(
     gainNodeRef.current = gainNode
     dataArrayRef.current = null
     prevSpectrumRef.current = null
-    smoothedRateRef.current = 1
     baselineRef.current = 0
 
     setIsActive(true)
@@ -203,9 +192,7 @@ export function useEnergyDetection(
     prevSpectrumRef.current = null
     baselineRef.current = 0
     setIsActive(false)
-    setPlaybackRate(1)
     setEnergy(0)
-    smoothedRateRef.current = 1
   }, [])
 
   // Update gain when micGain changes
@@ -236,9 +223,9 @@ export function useEnergyDetection(
   }, [detach])
 
   return {
-    playbackRate,
     isActive,
     energy,
+    bandEnergiesRef,
     attachStream,
     detach,
   }

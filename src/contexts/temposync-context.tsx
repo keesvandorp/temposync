@@ -19,10 +19,58 @@ export const DEFAULT_BAND_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.3, 0.15]
 export const BAND_LABELS = ["Sub", "Bass", "Low", "Mid", "High", "Air"]
 export const BAND_HZ = ["<60", "250", "500", "2k", "6k", "6k+"]
 
+// ── Easing modes ───────────────────────────────────────────
+
+export const EASING_MODES = [
+  "linear",
+  "smoothstep",
+  "inQuad",
+  "outQuad",
+  "inOutQuad",
+  "inCubic",
+  "outCubic",
+  "inOutCubic",
+  "inSine",
+  "outSine",
+  "inOutSine",
+  "inExpo",
+  "outExpo",
+  "inOutExpo",
+] as const
+
+export type EasingMode = (typeof EASING_MODES)[number]
+
+const easingFns: Record<EasingMode, (t: number) => number> = {
+  linear: (t) => t,
+  smoothstep: (t) => t * t * (3 - 2 * t),
+  inQuad: (t) => t * t,
+  outQuad: (t) => t * (2 - t),
+  inOutQuad: (t) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t),
+  inCubic: (t) => t * t * t,
+  outCubic: (t) => { const u = t - 1; return u * u * u + 1 },
+  inOutCubic: (t) => (t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1),
+  inSine: (t) => 1 - Math.cos(t * (Math.PI / 2)),
+  outSine: (t) => Math.sin(t * (Math.PI / 2)),
+  inOutSine: (t) => -(Math.cos(Math.PI * t) - 1) / 2,
+  inExpo: (t) => (t === 0 ? 0 : Math.pow(2, 10 * (t - 1))),
+  outExpo: (t) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
+  inOutExpo: (t) => {
+    if (t === 0 || t === 1) return t
+    return t < 0.5
+      ? Math.pow(2, 10 * (2 * t - 1)) / 2
+      : (2 - Math.pow(2, -10 * (2 * t - 1))) / 2
+  },
+}
+
+export function applyEasing(t: number, mode: EasingMode): number {
+  return easingFns[mode](Math.max(0, Math.min(1, t)))
+}
+
 interface Settings {
   energySensitivity: number
   micGain: number
   smoothing: number
+  easingMode: EasingMode
   minSpeed: number
   maxSpeed: number
   autoAdvance: boolean
@@ -33,7 +81,8 @@ interface Settings {
 const DEFAULT_SETTINGS: Settings = {
   energySensitivity: 3.0,
   micGain: 1.0,
-  smoothing: 0.85,
+  smoothing: 0.5,
+  easingMode: "outCubic",
   minSpeed: 0.5,
   maxSpeed: 4.0,
   autoAdvance: false,
@@ -86,6 +135,8 @@ interface TempoSyncContextValue {
   setMicGain: (v: number) => void
   smoothing: number
   setSmoothing: (v: number) => void
+  easingMode: EasingMode
+  setEasingMode: (v: EasingMode) => void
   minSpeed: number
   setMinSpeed: (v: number) => void
   maxSpeed: number
@@ -111,10 +162,12 @@ interface TempoSyncContextValue {
   // Refs shared with the video player render loop
   speedGraphRef: React.RefObject<HTMLCanvasElement | null>
   smoothingRef: React.RefObject<number>
+  easingModeRef: React.RefObject<EasingMode>
   minSpeedRef: React.RefObject<number>
   maxSpeedRef: React.RefObject<number>
   energyRef: React.RefObject<number>
   isActiveRef: React.RefObject<boolean>
+  bandEnergiesRef: React.RefObject<number[]>
 }
 
 const TempoSyncContext = createContext<TempoSyncContextValue | null>(null)
@@ -132,6 +185,7 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
   const [energySensitivity, setEnergySensitivity] = useState(DEFAULT_SETTINGS.energySensitivity)
   const [micGain, setMicGain] = useState(DEFAULT_SETTINGS.micGain)
   const [smoothing, setSmoothing] = useState(DEFAULT_SETTINGS.smoothing)
+  const [easingMode, setEasingMode] = useState<EasingMode>(DEFAULT_SETTINGS.easingMode)
   const [minSpeed, setMinSpeed] = useState(DEFAULT_SETTINGS.minSpeed)
   const [maxSpeed, setMaxSpeed] = useState(DEFAULT_SETTINGS.maxSpeed)
   const [autoAdvance, setAutoAdvance] = useState(DEFAULT_SETTINGS.autoAdvance)
@@ -160,6 +214,8 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
   const speedGraphRef = useRef<HTMLCanvasElement | null>(null)
   const smoothingRef = useRef(smoothing)
   smoothingRef.current = smoothing
+  const easingModeRef = useRef<EasingMode>(easingMode)
+  easingModeRef.current = easingMode
   const minSpeedRef = useRef(minSpeed)
   minSpeedRef.current = minSpeed
   const maxSpeedRef = useRef(maxSpeed)
@@ -173,6 +229,7 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
     setEnergySensitivity(s.energySensitivity)
     setMicGain(s.micGain)
     setSmoothing(s.smoothing)
+    if (s.easingMode && EASING_MODES.includes(s.easingMode)) setEasingMode(s.easingMode)
     setMinSpeed(s.minSpeed)
     setMaxSpeed(s.maxSpeed)
     setAutoAdvance(s.autoAdvance)
@@ -196,21 +253,22 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
       energySensitivity,
       micGain,
       smoothing,
+      easingMode,
       minSpeed,
       maxSpeed,
       autoAdvance,
       autoAdvanceSeconds,
       bandWeights,
     })
-  }, [energySensitivity, micGain, smoothing, minSpeed, maxSpeed, autoAdvance, autoAdvanceSeconds, bandWeights])
+  }, [energySensitivity, micGain, smoothing, easingMode, minSpeed, maxSpeed, autoAdvance, autoAdvanceSeconds, bandWeights])
 
   // ── Energy detection ──
   const energyOptions = useMemo(
-    () => ({ minSpeed: 0.25, maxSpeed: 4.0, smoothing: 0.85, energySensitivity, micGain, bandWeights }),
+    () => ({ energySensitivity, micGain, bandWeights }),
     [energySensitivity, micGain, bandWeights],
   )
 
-  const { isActive, energy, attachStream, detach } = useEnergyDetection(energyOptions)
+  const { isActive, energy, bandEnergiesRef, attachStream, detach } = useEnergyDetection(energyOptions)
 
   const energyRef = useRef(energy)
   energyRef.current = energy
@@ -364,6 +422,8 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
       setMicGain,
       smoothing,
       setSmoothing,
+      easingMode,
+      setEasingMode,
       minSpeed,
       setMinSpeed,
       maxSpeed,
@@ -385,10 +445,12 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
       setVideoProgress,
       speedGraphRef,
       smoothingRef,
+      easingModeRef,
       minSpeedRef,
       maxSpeedRef,
       energyRef,
       isActiveRef,
+      bandEnergiesRef,
     }),
     [
       playlist,
@@ -402,6 +464,7 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
       energySensitivity,
       micGain,
       smoothing,
+      easingMode,
       minSpeed,
       maxSpeed,
       autoAdvance,

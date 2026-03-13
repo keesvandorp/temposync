@@ -1,8 +1,13 @@
 {
   "name": "temposync",
-  "version": "0.1.0",
-  "author": {"name": "Kees van Dorp", "email": "keesvandorp@gmail.com"},
-  "private": true,
+  "description": "Real-time video tempo control driven by live musical energy.",
+  "version": "0.2.0",
+  "license": "MIT",
+  "author": {
+    "name": "Kees van Dorp",
+    "email": "keesvandorp@gmail.com"
+  },
+  "private": false,
   "scripts": {
     "dev": "next dev",
     "dev:secure": "next dev --experimental-https",
@@ -17,6 +22,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
     "react": "19.2.3",
