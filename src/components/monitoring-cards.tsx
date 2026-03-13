@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useTempoSync } from "@/contexts/temposync-context"
 
 export function WaveformCard() {
-  const { isListening } = useTempoSync()
+  const { isListening, micStream } = useTempoSync()
 
   return (
     <Card>
@@ -15,6 +15,7 @@ export function WaveformCard() {
       <CardContent>
         <LiveWaveform
           active={isListening}
+          stream={micStream}
           processing={false}
           mode="static"
           height={80}

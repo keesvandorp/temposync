@@ -170,6 +170,7 @@ export const VideoPlaylist = memo(function VideoPlaylist({
     <div className="space-y-1">
       
       <DndContext
+        id="playlist-dnd"
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}

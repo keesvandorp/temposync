@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 export type LiveWaveformProps = HTMLAttributes<HTMLDivElement> & {
   active?: boolean
   processing?: boolean
+  stream?: MediaStream | null
   deviceId?: string
   barWidth?: number
   barHeight?: number
@@ -30,6 +31,7 @@ export type LiveWaveformProps = HTMLAttributes<HTMLDivElement> & {
 export const LiveWaveform = ({
   active = false,
   processing = false,
+  stream: externalStream,
   deviceId,
   barWidth = 3,
   barGap = 1,
@@ -231,7 +233,8 @@ export const LiveWaveform = ({
   // Handle microphone setup and teardown
   useEffect(() => {
     if (!active) {
-      if (streamRef.current) {
+      // Only stop tracks if we own the stream (no external stream provided)
+      if (!externalStream && streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop())
         streamRef.current = null
         onStreamEnd?.()
@@ -250,22 +253,8 @@ export const LiveWaveform = ({
       return
     }
 
-    const setupMicrophone = async () => {
+    const setupAudio = async (stream: MediaStream) => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: deviceId
-            ? {
-                deviceId: { exact: deviceId },
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-              }
-            : {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-              },
-        })
         streamRef.current = stream
         onStreamReady?.(stream)
 
@@ -284,17 +273,35 @@ export const LiveWaveform = ({
         audioContextRef.current = audioContext
         analyserRef.current = analyser
 
-        // Clear history when starting
         historyRef.current = []
       } catch (error) {
         onError?.(error as Error)
       }
     }
 
-    setupMicrophone()
+    if (externalStream) {
+      // Use the provided stream directly
+      setupAudio(externalStream)
+    } else {
+      // Fall back to requesting our own mic stream
+      navigator.mediaDevices.getUserMedia({
+        audio: deviceId
+          ? {
+              deviceId: { exact: deviceId },
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          : {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+      }).then(setupAudio).catch((error) => onError?.(error as Error))
+    }
 
     return () => {
-      if (streamRef.current) {
+      if (!externalStream && streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop())
         streamRef.current = null
         onStreamEnd?.()
@@ -313,6 +320,7 @@ export const LiveWaveform = ({
     }
   }, [
     active,
+    externalStream,
     deviceId,
     fftSize,
     smoothingTimeConstant,

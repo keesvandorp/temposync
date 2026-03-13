@@ -151,6 +151,7 @@ interface TempoSyncContextValue {
 
   // Audio / energy
   isListening: boolean
+  micStream: MediaStream | null
   toggleListening: () => Promise<void>
   energy: number
   isActive: boolean
@@ -181,7 +182,8 @@ export function useTempoSync() {
 // ── Provider ───────────────────────────────────────────────
 
 export function TempoSyncProvider({ children }: { children: ReactNode }) {
-  // Settings state
+  // Settings state — initialized with defaults so SSR and client match.
+  // Cookie values are hydrated in the effect below.
   const [energySensitivity, setEnergySensitivity] = useState(DEFAULT_SETTINGS.energySensitivity)
   const [micGain, setMicGain] = useState(DEFAULT_SETTINGS.micGain)
   const [smoothing, setSmoothing] = useState(DEFAULT_SETTINGS.smoothing)
@@ -192,40 +194,53 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
   const [autoAdvanceSeconds, setAutoAdvanceSeconds] = useState(DEFAULT_SETTINGS.autoAdvanceSeconds)
   const [autoAdvanceCountdown, setAutoAdvanceCountdown] = useState(0)
   const [bandWeights, setBandWeights] = useState(DEFAULT_SETTINGS.bandWeights)
+  const hasMounted = useRef(false)
 
-  // Playlist state
-  const [playlist, setPlaylist] = useState<VideoItem[]>([])
-  const [currentId, setCurrentId] = useState<string | null>(null)
+  // Playlist state — initialized with defaults
+  const [playlist, setPlaylist] = useState<VideoItem[]>(() => {
+    const id1 = genId()
+    const id2 = genId()
+    return [
+      { id: id1, name: "welcome.mp4", url: "/videos/welcome.mp4" },
+      { id: id2, name: "eagle.mp4", url: "/videos/eagle.mp4" },
+    ]
+  })
+  const [currentId, setCurrentId] = useState<string | null>(() => playlist[0]?.id ?? null)
 
   // Audio state
   const [isListening, setIsListening] = useState(false)
+  const [micStream, setMicStream] = useState<MediaStream | null>(null)
   const [displayRate, setDisplayRate] = useState(1)
   const [videoProgress, setVideoProgress] = useState({ currentTime: 0, duration: 0 })
   const streamRef = useRef<MediaStream | null>(null)
-  const settingsLoaded = useRef(false)
 
   // Keep a ref that's always in sync so navigate (and the auto-advance
   // timer) always sees the very latest playlist without needing to nest
   // setCurrentId inside setPlaylist.
   const playlistRef = useRef<VideoItem[]>([])
-  playlistRef.current = playlist
 
   // Shared refs for the render loop
   const speedGraphRef = useRef<HTMLCanvasElement | null>(null)
   const smoothingRef = useRef(smoothing)
-  smoothingRef.current = smoothing
   const easingModeRef = useRef<EasingMode>(easingMode)
-  easingModeRef.current = easingMode
   const minSpeedRef = useRef(minSpeed)
-  minSpeedRef.current = minSpeed
   const maxSpeedRef = useRef(maxSpeed)
-  maxSpeedRef.current = maxSpeed
+
+  // Sync refs with state in an effect (React 19 lint requires this)
+  useEffect(() => {
+    playlistRef.current = playlist
+    smoothingRef.current = smoothing
+    easingModeRef.current = easingMode
+    minSpeedRef.current = minSpeed
+    maxSpeedRef.current = maxSpeed
+  })
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  // ── Hydrate from cookie ──
+  // ── Hydrate settings from cookie after mount ──
   useEffect(() => {
     const s = loadSettings()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate: browser-only cookie read must happen after hydration
     setEnergySensitivity(s.energySensitivity)
     setMicGain(s.micGain)
     setSmoothing(s.smoothing)
@@ -235,20 +250,12 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
     setAutoAdvance(s.autoAdvance)
     setAutoAdvanceSeconds(s.autoAdvanceSeconds)
     setBandWeights(s.bandWeights)
-    settingsLoaded.current = true
-
-    const id1 = genId()
-    const id2 = genId()
-    setPlaylist([
-      { id: id1, name: "welcome.mp4", url: "/videos/welcome.mp4" },
-      { id: id2, name: "eagle.mp4", url: "/videos/eagle.mp4" },
-    ])
-    setCurrentId(id1)
+    hasMounted.current = true
   }, [])
 
   // ── Persist to cookie ──
   useEffect(() => {
-    if (!settingsLoaded.current) return
+    if (!hasMounted.current) return
     saveSettings({
       energySensitivity,
       micGain,
@@ -271,9 +278,12 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
   const { isActive, energy, bandEnergiesRef, attachStream, detach } = useEnergyDetection(energyOptions)
 
   const energyRef = useRef(energy)
-  energyRef.current = energy
   const isActiveRef = useRef(isActive)
-  isActiveRef.current = isActive
+
+  useEffect(() => {
+    energyRef.current = energy
+    isActiveRef.current = isActive
+  })
 
   // ── Derived ──
   const currentVideo = useMemo(
@@ -301,7 +311,7 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
   const addFiles = useCallback((files: FileList | File[]) => {
     const newItems: VideoItem[] = []
     for (let i = 0; i < files.length; i++) {
-      const file = files instanceof FileList ? files[i] : files[i]
+      const file = files[i]
       if (!file.type.startsWith("video/")) continue
       const id = genId()
       newItems.push({ id, name: file.name, url: URL.createObjectURL(file) })
@@ -355,19 +365,14 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
 
   // ── Auto-advance timer ──
   useEffect(() => {
-    if (!autoAdvance || autoAdvanceSeconds <= 0) {
-      setAutoAdvanceCountdown(0)
-      return
-    }
+    if (!autoAdvance || autoAdvanceSeconds <= 0) return
     const deadline = Date.now() + autoAdvanceSeconds * 1000
-    setAutoAdvanceCountdown(autoAdvanceSeconds)
-    const tick = setInterval(() => {
+    const update = () => {
       const remaining = Math.max(0, (deadline - Date.now()) / 1000)
       setAutoAdvanceCountdown(remaining)
-      if (remaining <= 0) {
-        navigate(1)
-      }
-    }, 250)
+      if (remaining <= 0) navigate(1)
+    }
+    const tick = setInterval(update, 250)
     return () => clearInterval(tick)
   }, [autoAdvance, autoAdvanceSeconds, navigate, currentId])
 
@@ -379,6 +384,7 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
         streamRef.current.getTracks().forEach((track) => track.stop())
         streamRef.current = null
       }
+      setMicStream(null)
       setIsListening(false)
     } else {
       try {
@@ -395,12 +401,16 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
         })
         streamRef.current = stream
         attachStream(stream)
+        setMicStream(stream)
         setIsListening(true)
       } catch (error) {
         console.error("Failed to access microphone:", error)
       }
     }
   }, [isListening, attachStream, detach])
+
+  // Derive countdown display: show 0 when auto-advance is off
+  const displayCountdown = autoAdvance && autoAdvanceSeconds > 0 ? autoAdvanceCountdown : 0
 
   // ── Context value ──
   const value = useMemo<TempoSyncContextValue>(
@@ -432,10 +442,11 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
       setAutoAdvance,
       autoAdvanceSeconds,
       setAutoAdvanceSeconds,
-      autoAdvanceCountdown,
+      autoAdvanceCountdown: displayCountdown,
       bandWeights,
       setBandWeights,
       isListening,
+      micStream,
       toggleListening,
       energy,
       isActive,
@@ -460,6 +471,7 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
       navigate,
       addFiles,
       handleRemove,
+      handleReorder,
       openFilePicker,
       energySensitivity,
       micGain,
@@ -469,14 +481,16 @@ export function TempoSyncProvider({ children }: { children: ReactNode }) {
       maxSpeed,
       autoAdvance,
       autoAdvanceSeconds,
-      autoAdvanceCountdown,
+      displayCountdown,
       bandWeights,
       isListening,
+      micStream,
       toggleListening,
       energy,
       isActive,
       displayRate,
       videoProgress,
+      bandEnergiesRef,
     ],
   )
 

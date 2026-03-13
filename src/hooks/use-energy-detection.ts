@@ -36,14 +36,20 @@ export function useEnergyDetection(
 
   // Store options in refs so detect() never needs to be recreated
   const optionsRef = useRef({ energySensitivity, bandWeights })
-  optionsRef.current = { energySensitivity, bandWeights }
+  useEffect(() => {
+    optionsRef.current = { energySensitivity, bandWeights }
+  })
 
   // Track a running baseline (noise floor) that adapts slowly
   const baselineRef = useRef<number>(0)
   const prevSpectrumRef = useRef<Float32Array<ArrayBuffer> | null>(null)
   const bandEnergiesRef = useRef<number[]>([0, 0, 0, 0, 0, 0])
 
-  const detect = useCallback(() => {
+  // Use a ref for the detect function to avoid self-referencing useCallback issues
+  const detectRef = useRef<() => void>(() => {})
+
+  useEffect(() => {
+    detectRef.current = () => {
     const analyser = analyserRef.current
     if (!analyser) return
 
@@ -148,8 +154,11 @@ export function useEnergyDetection(
     // Export raw processed energy — easing and smoothing are handled by the render loop
     setEnergy(clamped)
 
-    animFrameRef.current = requestAnimationFrame(detect)
-  }, []) // stable — reads options from ref
+    animFrameRef.current = requestAnimationFrame(() => detectRef.current())
+    }
+  })
+
+  const detect = useCallback(() => detectRef.current(), [])
 
   const attachStream = useCallback((stream: MediaStream) => {
     if (audioContextRef.current && audioContextRef.current.state !== "closed") {

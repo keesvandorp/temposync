@@ -1,13 +1,18 @@
 {
   "name": "temposync",
   "description": "Real-time video tempo control driven by live musical energy.",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "license": "MIT",
   "author": {
     "name": "Kees van Dorp",
     "email": "keesvandorp@gmail.com"
   },
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/keesvandorp/temposync.git"
+  },
+  "homepage": "https://github.com/keesvandorp/temposync",
   "scripts": {
     "dev": "next dev",
     "dev:secure": "next dev --experimental-https",
@@ -27,7 +32,6 @@
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "shadcn": "^4.0.5",
     "tailwind-merge": "^3.5.0",
     "tw-animate-css": "^1.4.0"
   },
@@ -38,6 +42,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "shadcn": "^4.0.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

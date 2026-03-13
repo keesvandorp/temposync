@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
 import { useTempoSync, applyEasing } from "@/contexts/temposync-context"
 
 const CROSSFADE_SEC = 1
@@ -18,11 +17,6 @@ export function VideoPlayer() {
     openFilePicker,
     displayRate,
     setDisplayRate,
-    energy,
-    isActive,
-    smoothing,
-    minSpeed,
-    maxSpeed,
     speedGraphRef,
     smoothingRef,
     easingModeRef,
@@ -263,7 +257,7 @@ export function VideoPlayer() {
 
     rafId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafId)
-  }, [CROSSFADE_SEC, currentVideo, setDisplayRate, setVideoProgress, speedGraphRef, smoothingRef, minSpeedRef, maxSpeedRef, energyRef, isActiveRef])
+  }, [currentVideo, setDisplayRate, setVideoProgress, speedGraphRef, smoothingRef, easingModeRef, minSpeedRef, maxSpeedRef, energyRef, isActiveRef])
 
   // ── Load video (crossfade) ──
   useEffect(() => {
@@ -305,7 +299,6 @@ export function VideoPlayer() {
     }
     crossfadeRef.current = 0
     fadingRef.current = true
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentVideo])
 
   // ── Fullscreen ──

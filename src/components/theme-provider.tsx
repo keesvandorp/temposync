@@ -32,14 +32,11 @@ export function ThemeProvider({
   children: React.ReactNode
   defaultTheme?: Theme
 }) {
-  const [theme, setTheme] = useState<Theme>(defaultTheme)
-
-  useEffect(() => {
-    const stored = getCookie("theme") as Theme | undefined
-    if (stored === "dark" || stored === "light") {
-      setTheme(stored)
-    }
-  }, [])
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = getCookie("theme")
+    if (stored === "dark" || stored === "light") return stored
+    return defaultTheme
+  })
 
   useEffect(() => {
     const root = document.documentElement

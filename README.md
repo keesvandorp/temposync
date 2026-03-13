@@ -5,8 +5,23 @@
 <h1 align="center">TempoSync</h1>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white" alt="TypeScript 5" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
+  <img src="https://img.shields.io/badge/ESLint-9-4b32c3?logo=eslint&logoColor=white" alt="ESLint 9" />
+  <img src="https://img.shields.io/badge/pnpm-9-f69220?logo=pnpm&logoColor=white" alt="pnpm" />
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License" />
+</p>
+
+<p align="center">
   TempoSync lets looping visuals move with the music. Built for live performance, it listens to real-time audio energy and transforms it into playback speed, creating visuals that swell, drift, and breathe alongside the sound.
 </p>
+
+<p align="center">
+  <img src="public/performance.jpg" alt="A pianist performing in a venue with projected visuals driven by TempoSync" width="600" />
+</p>
+
 
 ## How it works
 
@@ -157,7 +172,7 @@ src/
 - [Next.js 16](https://nextjs.org/) — App Router, Turbopack
 - [React 19](https://react.dev/)
 - [Tailwind CSS v4](https://tailwindcss.com/)
-- [shadcn/ui](https://ui.shadcn.com/) — Button, Card, Slider, Badge, Switch, Input, InputGroup, Label, Command, Select
+- [shadcn/ui](https://ui.shadcn.com/) — Button, Card, Slider, Badge, Switch, Input, InputGroup, Command
 - [@dnd-kit](https://dndkit.com/) — drag-and-drop playlist reordering
 - [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) — AudioContext → GainNode → AnalyserNode
 
