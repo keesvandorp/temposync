@@ -22,6 +22,12 @@
   <img src="public/performance.jpg" alt="A pianist performing in a venue with projected visuals driven by TempoSync" width="600" />
 </p>
 
+<p align="center">
+  <img src="public/performance2.jpg" alt="Live performance with TempoSync visuals" width="295" />
+  &nbsp;
+  <img src="public/performance3.jpg" alt="Live performance with TempoSync visuals" width="295" />
+</p>
+
 
 ## How it works
 
