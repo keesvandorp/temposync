@@ -13,14 +13,13 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { Slider } from "@/components/ui/slider"
+import { useTempoSync } from "@/hooks/use-tempo-sync"
 import {
-  useTempoSync,
   DEFAULT_BAND_WEIGHTS,
   BAND_LABELS,
   BAND_HZ,
-  EASING_MODES,
-  type EasingMode,
 } from "@/contexts/temposync-context"
+import { EASING_MODES, type EasingMode } from "@/lib/easing"
 import { ChevronsUpDown } from "lucide-react"
 
 function BandMeter({ index }: { index: number }) {

@@ -18,7 +18,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { useTempoSync } from "@/contexts/temposync-context"
+import { useTempoSync } from "@/hooks/use-tempo-sync"
+import { formatTime } from "@/lib/format"
 
 export interface VideoItem {
   id: string
@@ -32,12 +33,6 @@ interface VideoPlaylistProps {
   onReorder: (items: VideoItem[]) => void
   onSelect: (id: string) => void
   onRemove: (id: string) => void
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, "0")}`
 }
 
 const SortableItem = memo(function SortableItem({

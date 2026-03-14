@@ -12,59 +12,16 @@ import {
 } from "react"
 import { useEnergyDetection } from "@/hooks/use-energy-detection"
 import type { VideoItem } from "@/components/video-playlist"
+import { applyEasing, EASING_MODES, type EasingMode } from "@/lib/easing"
+import { DEFAULT_BAND_WEIGHTS } from "@/lib/audio"
+
+// Re-export so existing consumers don't break
+export { applyEasing, EASING_MODES, DEFAULT_BAND_WEIGHTS, type EasingMode }
 
 // ── Constants ──────────────────────────────────────────────
 
-export const DEFAULT_BAND_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.3, 0.15]
 export const BAND_LABELS = ["Sub", "Bass", "Low", "Mid", "High", "Air"]
 export const BAND_HZ = ["<60", "250", "500", "2k", "6k", "6k+"]
-
-// ── Easing modes ───────────────────────────────────────────
-
-export const EASING_MODES = [
-  "linear",
-  "smoothstep",
-  "inQuad",
-  "outQuad",
-  "inOutQuad",
-  "inCubic",
-  "outCubic",
-  "inOutCubic",
-  "inSine",
-  "outSine",
-  "inOutSine",
-  "inExpo",
-  "outExpo",
-  "inOutExpo",
-] as const
-
-export type EasingMode = (typeof EASING_MODES)[number]
-
-const easingFns: Record<EasingMode, (t: number) => number> = {
-  linear: (t) => t,
-  smoothstep: (t) => t * t * (3 - 2 * t),
-  inQuad: (t) => t * t,
-  outQuad: (t) => t * (2 - t),
-  inOutQuad: (t) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t),
-  inCubic: (t) => t * t * t,
-  outCubic: (t) => { const u = t - 1; return u * u * u + 1 },
-  inOutCubic: (t) => (t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1),
-  inSine: (t) => 1 - Math.cos(t * (Math.PI / 2)),
-  outSine: (t) => Math.sin(t * (Math.PI / 2)),
-  inOutSine: (t) => -(Math.cos(Math.PI * t) - 1) / 2,
-  inExpo: (t) => (t === 0 ? 0 : Math.pow(2, 10 * (t - 1))),
-  outExpo: (t) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
-  inOutExpo: (t) => {
-    if (t === 0 || t === 1) return t
-    return t < 0.5
-      ? Math.pow(2, 10 * (2 * t - 1)) / 2
-      : (2 - Math.pow(2, -10 * (2 * t - 1))) / 2
-  },
-}
-
-export function applyEasing(t: number, mode: EasingMode): number {
-  return easingFns[mode](Math.max(0, Math.min(1, t)))
-}
 
 interface Settings {
   energySensitivity: number
@@ -171,13 +128,7 @@ interface TempoSyncContextValue {
   bandEnergiesRef: React.RefObject<number[]>
 }
 
-const TempoSyncContext = createContext<TempoSyncContextValue | null>(null)
-
-export function useTempoSync() {
-  const ctx = useContext(TempoSyncContext)
-  if (!ctx) throw new Error("useTempoSync must be used within TempoSyncProvider")
-  return ctx
-}
+export const TempoSyncContext = createContext<TempoSyncContextValue | null>(null)
 
 // ── Provider ───────────────────────────────────────────────
 

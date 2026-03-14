@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { useTempoSync, applyEasing } from "@/contexts/temposync-context"
+import { useTempoSync } from "@/hooks/use-tempo-sync"
+import { applyEasing } from "@/lib/easing"
 
 const CROSSFADE_SEC = 1
 const GRAPH_LEN = 1800

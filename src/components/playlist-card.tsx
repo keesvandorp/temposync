@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/input-group"
 import { VideoPlaylist } from "@/components/video-playlist"
 import { Plus } from "lucide-react"
-import { useTempoSync } from "@/contexts/temposync-context"
+import { useTempoSync } from "@/hooks/use-tempo-sync"
 
 export function PlaylistCard() {
   const {

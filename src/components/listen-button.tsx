@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Mic, StopCircle } from "lucide-react"
-import { useTempoSync } from "@/contexts/temposync-context"
+import { useTempoSync } from "@/hooks/use-tempo-sync"
 
 export function ListenButton() {
   const { isListening, toggleListening } = useTempoSync()

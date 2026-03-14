@@ -2,7 +2,7 @@
 
 import { LiveWaveform } from "@/components/ui/live-waveform"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useTempoSync } from "@/contexts/temposync-context"
+import { useTempoSync } from "@/hooks/use-tempo-sync"
 
 export function WaveformCard() {
   const { isListening, micStream } = useTempoSync()
